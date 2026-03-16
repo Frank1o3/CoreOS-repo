@@ -1,6 +1,6 @@
 # Maintainer: Franklin <https://github.com/Frank1o3>
 pkgname=modforge-cli
-pkgver=1.0.0
+pkgver=0.2.6.1
 pkgrel=1
 pkgdesc="Modpack builder tool"
 arch=('any')
@@ -10,7 +10,7 @@ depends=('python' 'python-pip')
 optdepends=()
 conflicts=()
 provides=('modforge-cli')
-source=("${pkgname}-${pkgver}.whl::https://github.com/Frank1o3/ModForge-CLI/releases/download/v${pkgver}/modforge-${pkgver}-py3-none-any.whl")
+source=("modforge_cli-${pkgver}-py3-none-any.whl::https://github.com/Frank1o3/ModForge-CLI/releases/download/v${pkgver}/modforge_cli-${pkgver}-py3-none-any.whl")
 sha256sums=('SKIP')
 
 package() {
@@ -20,5 +20,5 @@ package() {
         --ignore-installed \
         --prefix=/usr \
         --no-deps \
-        "${srcdir}/${pkgname}-${pkgver}.whl"
+        "${srcdir}/modforge_cli-${pkgver}-py3-none-any.whl"
 }

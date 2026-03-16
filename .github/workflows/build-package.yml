@@ -1,11 +1,9 @@
 name: Build and publish package
 
 on:
-  # Triggers when any package repo under packages/ gets a new release tag
-  # Tag format: <pkgname>-v<version>  e.g. modforge-cli-v1.2.0
   push:
     tags:
-      - "*-v*"
+      - "*-v*" # CoreOS-repo tags like modforge-cli-v1.0.0
 
   # Also allow manual trigger from Actions tab
   workflow_dispatch:
@@ -15,12 +13,26 @@ on:
         required: true
         type: string
 
+on:
+  push:
+    tags:
+      - '*-v*'
+  repository_dispatch:
+    types: [modforge-cli-release]
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package name'
+        required: true
+      version:
+        description: 'Version (e.g. 0.2.6.1)'
+        required: false
+
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
     container:
       image: archlinux:latest
-
     steps:
       # ── Setup ──────────────────────────────────────────────────────────────
       - name: Install build dependencies
@@ -40,16 +52,19 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       # ── Determine which package to build ───────────────────────────────────
-      - name: Resolve package name
+      - name: Resolve package and version
         id: pkg
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          if [[ "${{ github.event_name }}" == "repository_dispatch" ]]; then
+            echo "name=${{ github.event.client_payload.package }}" >> $GITHUB_OUTPUT
+            echo "version=${{ github.event.client_payload.version }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             echo "name=${{ inputs.package }}" >> $GITHUB_OUTPUT
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
           else
-            # Extract package name from tag (modforge-cli-v1.2.0 → modforge-cli)
             TAG="${{ github.ref_name }}"
-            PKG="${TAG%-v*}"
-            echo "name=${PKG}" >> $GITHUB_OUTPUT
+            echo "name=${TAG%-v*}" >> $GITHUB_OUTPUT
+            echo "version=${TAG#*-v}" >> $GITHUB_OUTPUT
           fi
 
       # ── Import signing key ─────────────────────────────────────────────────
@@ -75,13 +90,13 @@ jobs:
       - name: Build package
         run: |
           PKG="${{ steps.pkg.outputs.name }}"
+          VER="${{ steps.pkg.outputs.version }}"
           cd packages/${PKG}
-          # Run makepkg as builder user
+          # Update pkgver dynamically if version was passed
+          if [[ -n "${VER}" ]]; then
+            sed -i "s/^pkgver=.*/pkgver=${VER}/" PKGBUILD
+          fi
           sudo -u builder makepkg -s --noconfirm --noprogressbar
-          echo "PKG_NAME=${PKG}" >> $GITHUB_ENV
-          # Find the built package file
-          PKG_FILE=$(ls *.pkg.tar.zst | head -n1)
-          echo "PKG_FILE=${PKG_FILE}" >> $GITHUB_ENV
 
       # ── Sign package ───────────────────────────────────────────────────────
       - name: Sign package
