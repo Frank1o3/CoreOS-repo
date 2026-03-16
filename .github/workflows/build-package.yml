@@ -52,23 +52,15 @@ jobs:
             echo "name=${PKG}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Debug secrets
-        run: |
-          if [ -z "${{ secrets.COREOS_GPG_PRIVATE_KEY }}" ]; then
-            echo "SECRET IS EMPTY OR NOT FOUND"
-          else
-            echo "SECRET EXISTS, length: ${#GPG_PRIVATE_KEY}"
-          fi
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.COREOS_GPG_PRIVATE_KEY }}
-
       # ── Import signing key ─────────────────────────────────────────────────
       - name: Import GPG signing key
         env:
           GPG_PRIVATE_KEY: ${{ secrets.COREOS_GPG_PRIVATE_KEY }}
         run: |
           printf '%s' "${GPG_PRIVATE_KEY}" | gpg --batch --import
-          echo "${{ secrets.COREOS_GPG_KEY_ID }}:6:" | gpg --import-ownertrust
+          # Get full fingerprint for ownertrust
+          FPR=$(gpg --list-secret-keys --with-colons | grep '^fpr' | head -n1 | cut -d':' -f10)
+          echo "${FPR}:6:" | gpg --import-ownertrust
           echo "GPG_KEY_ID=${{ secrets.COREOS_GPG_KEY_ID }}" >> $GITHUB_ENV
 
       # ── Build package ──────────────────────────────────────────────────────
