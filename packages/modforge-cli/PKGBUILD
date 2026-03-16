@@ -1,7 +1,7 @@
 # Maintainer: Franklin <https://github.com/Frank1o3>
 pkgname=modforge-cli
 pkgver=0.2.7
-pkgrel=2
+pkgrel=3
 pkgdesc="ModForge-CLI — a Modrinth-based Minecraft modpack builder"
 arch=('any')
 url="https://github.com/Frank1o3/ModForge-CLI"
@@ -12,12 +12,12 @@ depends=(
     'python-jsonschema'
     'python-aiofiles'
     'python-pydantic'
-    'python-pyzipper'
     'python-rich'
     'python-aiohttp'
     'python-pyfiglet'
     'python-typer'
 )
+# pyzipper not in official repos — bundled via pip
 optdepends=()
 conflicts=()
 provides=('modforge-cli')
@@ -25,6 +25,16 @@ source=("modforge_cli-${pkgver}-py3-none-any.whl::https://github.com/Frank1o3/Mo
 sha256sums=('SKIP')
 
 package() {
+    # Install pyzipper separately since it's not in official repos
+    pip install \
+        --isolated \
+        --root="${pkgdir}" \
+        --ignore-installed \
+        --prefix=/usr \
+        --no-deps \
+        pyzipper
+
+    # Install modforge-cli
     pip install \
         --isolated \
         --root="${pkgdir}" \
