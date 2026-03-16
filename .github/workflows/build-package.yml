@@ -18,6 +18,8 @@ on:
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     container:
       image: archlinux:latest
     steps:
