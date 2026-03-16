@@ -52,6 +52,16 @@ jobs:
             echo "name=${PKG}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Debug secrets
+        run: |
+          if [ -z "${{ secrets.COREOS_GPG_PRIVATE_KEY }}" ]; then
+            echo "SECRET IS EMPTY OR NOT FOUND"
+          else
+            echo "SECRET EXISTS, length: ${#GPG_PRIVATE_KEY}"
+          fi
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.COREOS_GPG_PRIVATE_KEY }}
+
       # ── Import signing key ─────────────────────────────────────────────────
       - name: Import GPG signing key
         env:
