@@ -3,19 +3,6 @@ name: Build and publish package
 on:
   push:
     tags:
-      - "*-v*" # CoreOS-repo tags like modforge-cli-v1.0.0
-
-  # Also allow manual trigger from Actions tab
-  workflow_dispatch:
-    inputs:
-      package:
-        description: "Package name to build (e.g. modforge-cli)"
-        required: true
-        type: string
-
-on:
-  push:
-    tags:
       - '*-v*'
   repository_dispatch:
     types: [modforge-cli-release]
