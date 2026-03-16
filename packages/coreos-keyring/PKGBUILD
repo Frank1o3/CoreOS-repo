@@ -1,0 +1,15 @@
+pkgname=coreos-keyring
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="CoreOS package signing keys"
+arch=('any')
+url="https://github.com/Frank1o3/CoreOS-repo"
+license=('MIT')
+depends=('pacman')
+source=("coreos-repo.gpg::https://frank1o3.github.io/CoreOS-repo/coreos-repo.gpg")
+sha256sums=('SKIP')
+
+package() {
+    install -Dm644 "${srcdir}/coreos-repo.gpg" \
+        "${pkgdir}/usr/share/pacman/keyrings/coreos.gpg"
+}
