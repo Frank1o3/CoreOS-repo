@@ -1,12 +1,23 @@
 # Maintainer: Franklin <https://github.com/Frank1o3>
 pkgname=modforge-cli
-pkgver=0.2.6.1
-pkgrel=1
-pkgdesc="Modpack builder tool"
+pkgver=0.2.7
+pkgrel=2
+pkgdesc="ModForge-CLI — a Modrinth-based Minecraft modpack builder"
 arch=('any')
 url="https://github.com/Frank1o3/ModForge-CLI"
 license=('MIT')
-depends=('python' 'python-pip')
+depends=(
+    'python'
+    'python-requests'
+    'python-jsonschema'
+    'python-aiofiles'
+    'python-pydantic'
+    'python-pyzipper'
+    'python-rich'
+    'python-aiohttp'
+    'python-pyfiglet'
+    'python-typer'
+)
 optdepends=()
 conflicts=()
 provides=('modforge-cli')
