@@ -1,0 +1,136 @@
+name: Build and publish package
+
+on:
+  # Triggers when any package repo under packages/ gets a new release tag
+  # Tag format: <pkgname>-v<version>  e.g. modforge-cli-v1.2.0
+  push:
+    tags:
+      - '*-v*'
+
+  # Also allow manual trigger from Actions tab
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package name to build (e.g. modforge-cli)'
+        required: true
+        type: string
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
+
+    steps:
+      # ── Setup ──────────────────────────────────────────────────────────────
+      - name: Install build dependencies
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm \
+            base-devel \
+            git \
+            gnupg \
+            python \
+            python-pip
+
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── Determine which package to build ───────────────────────────────────
+      - name: Resolve package name
+        id: pkg
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "name=${{ inputs.package }}" >> $GITHUB_OUTPUT
+          else
+            # Extract package name from tag (modforge-cli-v1.2.0 → modforge-cli)
+            TAG="${{ github.ref_name }}"
+            PKG="${TAG%-v*}"
+            echo "name=${PKG}" >> $GITHUB_OUTPUT
+          fi
+
+      # ── Import signing key ─────────────────────────────────────────────────
+      - name: Import GPG signing key
+        run: |
+          echo "${{ secrets.COREOS_GPG_PRIVATE_KEY }}" | gpg --batch --import
+          GPG_KEY_ID=$(gpg --list-secret-keys --keyid-format LONG | grep sec | awk '{print $2}' | cut -d'/' -f2)
+          echo "GPG_KEY_ID=${GPG_KEY_ID}" >> $GITHUB_ENV
+          # Set ultimate trust
+          echo "${GPG_KEY_ID}:6:" | gpg --import-ownertrust
+
+      # ── Build package ──────────────────────────────────────────────────────
+      - name: Create build user (makepkg refuses root)
+        run: |
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+          # Give builder access to the workspace
+          chown -R builder:builder /github/workspace 2>/dev/null || \
+          chown -R builder:builder $GITHUB_WORKSPACE
+
+      - name: Build package
+        run: |
+          PKG="${{ steps.pkg.outputs.name }}"
+          cd packages/${PKG}
+          # Run makepkg as builder user
+          sudo -u builder makepkg -s --noconfirm --noprogressbar
+          echo "PKG_NAME=${PKG}" >> $GITHUB_ENV
+          # Find the built package file
+          PKG_FILE=$(ls *.pkg.tar.zst | head -n1)
+          echo "PKG_FILE=${PKG_FILE}" >> $GITHUB_ENV
+
+      # ── Sign package ───────────────────────────────────────────────────────
+      - name: Sign package
+        run: |
+          cd packages/${{ env.PKG_NAME }}
+          gpg --batch --yes \
+              --detach-sign \
+              --no-armor \
+              -u ${{ env.GPG_KEY_ID }} \
+              ${{ env.PKG_FILE }}
+
+      # ── Update repo database ───────────────────────────────────────────────
+      - name: Checkout gh-pages branch
+        run: |
+          git config --global user.email "github-actions@github.com"
+          git config --global user.name "CoreOS Bot"
+          # Get or create gh-pages branch content
+          git fetch origin gh-pages 2>/dev/null || true
+          mkdir -p /tmp/repo-root/x86_64
+          # Copy existing db if it exists
+          git show origin/gh-pages:x86_64/coreos.db.tar.gz > /tmp/repo-root/x86_64/coreos.db.tar.gz 2>/dev/null || true
+          git show origin/gh-pages:x86_64/coreos.files.tar.gz > /tmp/repo-root/x86_64/coreos.files.tar.gz 2>/dev/null || true
+
+      - name: Add package to repo database
+        run: |
+          # Copy built package and sig to repo
+          cp packages/${{ env.PKG_NAME }}/${{ env.PKG_FILE }} /tmp/repo-root/x86_64/
+          cp packages/${{ env.PKG_NAME }}/${{ env.PKG_FILE }}.sig /tmp/repo-root/x86_64/
+          # Update the database
+          cd /tmp/repo-root/x86_64
+          repo-add --sign \
+                   --key ${{ env.GPG_KEY_ID }} \
+                   --verify \
+                   coreos.db.tar.gz \
+                   ${{ env.PKG_FILE }}
+          # Create symlinks (pacman expects both db and db.tar.gz)
+          ln -sf coreos.db.tar.gz coreos.db
+          ln -sf coreos.files.tar.gz coreos.files
+
+      # ── Export public key for users ────────────────────────────────────────
+      - name: Export public key
+        run: |
+          gpg --armor --export ${{ env.GPG_KEY_ID }} > /tmp/repo-root/coreos-repo.gpg
+
+      # ── Push to gh-pages ───────────────────────────────────────────────────
+      - name: Push to gh-pages
+        run: |
+          cd /tmp/repo-root
+          git init
+          git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          git checkout -b gh-pages
+          git add .
+          git commit -m "repo: add ${{ env.PKG_FILE }}"
+          git push origin gh-pages --force
