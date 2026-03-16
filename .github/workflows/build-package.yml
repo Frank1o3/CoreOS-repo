@@ -3,16 +3,16 @@ name: Build and publish package
 on:
   push:
     tags:
-      - '*-v*'
+      - "*-v*"
   repository_dispatch:
     types: [modforge-cli-release]
   workflow_dispatch:
     inputs:
       package:
-        description: 'Package name'
+        description: "Package name"
         required: true
       version:
-        description: 'Version (e.g. 0.2.6.1)'
+        description: "Version (e.g. 0.2.7)"
         required: false
 
 jobs:
@@ -87,12 +87,15 @@ jobs:
 
       # ── Sign package ───────────────────────────────────────────────────────
       - name: Sign package
+        env:
+          GPG_KEY_ID: ${{ secrets.COREOS_GPG_KEY_ID }}
         run: |
           cd packages/${{ env.PKG_NAME }}
           gpg --batch --yes \
+              --pinentry-mode loopback \
               --detach-sign \
               --no-armor \
-              -u ${{ env.GPG_KEY_ID }} \
+              -u ${GPG_KEY_ID} \
               ${{ env.PKG_FILE }}
 
       # ── Update repo database ───────────────────────────────────────────────
@@ -108,18 +111,19 @@ jobs:
           git show origin/gh-pages:x86_64/coreos.files.tar.gz > /tmp/repo-root/x86_64/coreos.files.tar.gz 2>/dev/null || true
 
       - name: Add package to repo database
+        env:
+          GPG_KEY_ID: ${{ secrets.COREOS_GPG_KEY_ID }}
         run: |
-          # Copy built package and sig to repo
           cp packages/${{ env.PKG_NAME }}/${{ env.PKG_FILE }} /tmp/repo-root/x86_64/
           cp packages/${{ env.PKG_NAME }}/${{ env.PKG_FILE }}.sig /tmp/repo-root/x86_64/
-          # Update the database
           cd /tmp/repo-root/x86_64
+          # Tell GPG to use loopback so it doesn't try to open a TTY
+          echo "pinentry-mode loopback" >> /github/home/.gnupg/gpg.conf
           repo-add --sign \
-                   --key ${{ env.GPG_KEY_ID }} \
-                   --verify \
-                   coreos.db.tar.gz \
-                   ${{ env.PKG_FILE }}
-          # Create symlinks (pacman expects both db and db.tar.gz)
+                  --key ${GPG_KEY_ID} \
+                  --verify \
+                  coreos.db.tar.gz \
+                  ${{ env.PKG_FILE }}
           ln -sf coreos.db.tar.gz coreos.db
           ln -sf coreos.files.tar.gz coreos.files
 
