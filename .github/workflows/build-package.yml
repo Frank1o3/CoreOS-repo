@@ -79,24 +79,26 @@ jobs:
           PKG="${{ steps.pkg.outputs.name }}"
           VER="${{ steps.pkg.outputs.version }}"
           cd packages/${PKG}
-          # Update pkgver dynamically if version was passed
           if [[ -n "${VER}" ]]; then
             sed -i "s/^pkgver=.*/pkgver=${VER}/" PKGBUILD
           fi
           sudo -u builder makepkg -s --noconfirm --noprogressbar
+          # Export for subsequent steps
+          PKG_FILE=$(ls *.pkg.tar.zst | head -n1)
+          echo "PKG_NAME=${PKG}" >> $GITHUB_ENV
+          echo "PKG_FILE=${PKG_FILE}" >> $GITHUB_ENV
 
       # ── Sign package ───────────────────────────────────────────────────────
       - name: Sign package
         env:
           GPG_KEY_ID: ${{ secrets.COREOS_GPG_KEY_ID }}
         run: |
-          cd packages/${{ env.PKG_NAME }}
           gpg --batch --yes \
               --pinentry-mode loopback \
               --detach-sign \
               --no-armor \
               -u ${GPG_KEY_ID} \
-              ${{ env.PKG_FILE }}
+              packages/${{ env.PKG_NAME }}/${{ env.PKG_FILE }}
 
       # ── Update repo database ───────────────────────────────────────────────
       - name: Checkout gh-pages branch
