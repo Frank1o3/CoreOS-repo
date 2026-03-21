@@ -1,0 +1,52 @@
+# Maintainer: Franklin <https://github.com/Frank1o3>
+pkgname=aimbot
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Color-tracking aimbot for Linux/X11 — i3 floating window aware"
+arch=('x86_64')
+url="https://github.com/Frank1o3/Aimbot"
+license=('MIT')
+depends=(
+    'opencv'
+    'libx11'
+    'libxext'
+)
+optdepends=(
+    'xdotool: optional window debugging'
+)
+provides=('aimbot')
+conflicts=()
+
+# Downloads the prebuilt binary from the GitHub release.
+# The CI in the Aimbot repo produces aimbot-linux-x86_64 on every release.
+source=(
+    "aimbot-${pkgver}::https://github.com/Frank1o3/Aimbot/releases/download/v${pkgver}/aimbot-linux-x86_64"
+    "config.json::https://raw.githubusercontent.com/Frank1o3/Aimbot/v${pkgver}/config.json"
+)
+sha256sums=('SKIP' 'SKIP')
+
+package() {
+    # Install the binary
+    install -Dm755 "${srcdir}/aimbot-${pkgver}" "${pkgdir}/usr/bin/aimbot"
+
+    # Install a default config to /etc so users have a reference
+    # (actual runtime config lives next to the binary / in the working dir)
+    install -Dm644 "${srcdir}/config.json" \
+        "${pkgdir}/usr/share/aimbot/config.json.example"
+
+    # Udev rule so users in the 'input' group can use /dev/uinput without sudo
+    # (same group that gives evdev keyboard/mouse access)
+    install -dm755 "${pkgdir}/usr/lib/udev/rules.d"
+    echo 'KERNEL=="uinput", MODE="0660", GROUP="input"' \
+        > "${pkgdir}/usr/lib/udev/rules.d/99-uinput.rules"
+}
+
+post_install() {
+    echo "==> Run the following to enable uinput and keyboard/mouse input access:"
+    echo "      sudo modprobe uinput"
+    echo "      sudo udevadm control --reload && sudo udevadm trigger"
+    echo "      sudo usermod -aG input \$USER"
+    echo "    Then re-login for group membership to take effect."
+    echo "==> Copy the example config and edit it before first run:"
+    echo "      cp /usr/share/aimbot/config.json.example ./config.json"
+}
