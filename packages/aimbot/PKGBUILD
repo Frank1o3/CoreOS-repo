@@ -22,7 +22,7 @@ conflicts=()
 source=(
     "aimbot-${pkgver}::https://github.com/Frank1o3/Aimbot/releases/download/v${pkgver}/aimbot-linux-x86_64"
 )
-sha256sums=('SKIP' 'SKIP')
+sha256sums=('SKIP')
 
 package() {
     # Install the binary
