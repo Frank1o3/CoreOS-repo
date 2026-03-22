@@ -21,18 +21,12 @@ conflicts=()
 # The CI in the Aimbot repo produces aimbot-linux-x86_64 on every release.
 source=(
     "aimbot-${pkgver}::https://github.com/Frank1o3/Aimbot/releases/download/v${pkgver}/aimbot-linux-x86_64"
-    "config.json::https://raw.githubusercontent.com/Frank1o3/Aimbot/v${pkgver}/config.json"
 )
 sha256sums=('SKIP' 'SKIP')
 
 package() {
     # Install the binary
     install -Dm755 "${srcdir}/aimbot-${pkgver}" "${pkgdir}/usr/bin/aimbot"
-
-    # Install a default config to /etc so users have a reference
-    # (actual runtime config lives next to the binary / in the working dir)
-    install -Dm644 "${srcdir}/config.json" \
-        "${pkgdir}/usr/share/aimbot/config.json.example"
 
     # Udev rule so users in the 'input' group can use /dev/uinput without sudo
     # (same group that gives evdev keyboard/mouse access)
