@@ -1,6 +1,6 @@
-# Maintainer: Franklin <https://github.com/Frank1o3>
+# Maintainer: Franklin <jahdy1o3@gmail.com>
 pkgname=aimbot
-pkgver=1.0.0
+pkgver=1.0.8
 pkgrel=1
 pkgdesc="Color-tracking aimbot for Linux/X11 — i3 floating window aware"
 arch=('x86_64')
@@ -11,25 +11,35 @@ depends=(
     'libx11'
     'libxext'
 )
+makedepends=(
+    'cmake'
+    'ninja'
+)
 optdepends=(
     'xdotool: optional window debugging'
 )
 provides=('aimbot')
 conflicts=()
 
-# Downloads the prebuilt binary from the GitHub release.
-# The CI in the Aimbot repo produces aimbot-linux-x86_64 on every release.
 source=(
-    "aimbot-${pkgver}::https://github.com/Frank1o3/Aimbot/releases/download/v${pkgver}/aimbot-linux-x86_64"
+    "aimbot-${pkgver}.tar.gz::https://github.com/Frank1o3/Aimbot/archive/refs/tags/v${pkgver}.tar.gz"
 )
 sha256sums=('SKIP')
 
+build() {
+    cd "Aimbot-${pkgver}"
+    cmake -S . -B build \
+        -GNinja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr
+    cmake --build build --parallel
+}
+
 package() {
-    # Install the binary
-    install -Dm755 "${srcdir}/aimbot-${pkgver}" "${pkgdir}/usr/bin/aimbot"
+    cd "Aimbot-${pkgver}"
+    DESTDIR="${pkgdir}" cmake --install build
 
     # Udev rule so users in the 'input' group can use /dev/uinput without sudo
-    # (same group that gives evdev keyboard/mouse access)
     install -dm755 "${pkgdir}/usr/lib/udev/rules.d"
     echo 'KERNEL=="uinput", MODE="0660", GROUP="input"' \
         > "${pkgdir}/usr/lib/udev/rules.d/99-uinput.rules"
@@ -41,6 +51,4 @@ post_install() {
     echo "      sudo udevadm control --reload && sudo udevadm trigger"
     echo "      sudo usermod -aG input \$USER"
     echo "    Then re-login for group membership to take effect."
-    echo "==> Copy the example config and edit it before first run:"
-    echo "      cp /usr/share/aimbot/config.json.example ./config.json"
 }
