@@ -107,42 +107,65 @@ jobs:
         run: |
           git config --global user.email "github-actions@github.com"
           git config --global user.name "CoreOS Bot"
-          # Get or create gh-pages branch content
-          git fetch origin gh-pages 2>/dev/null || true
-          mkdir -p /tmp/repo-root/x86_64
-          # Copy existing db if it exists
-          git show origin/gh-pages:x86_64/coreos.db.tar.gz > /tmp/repo-root/x86_64/coreos.db.tar.gz 2>/dev/null || true
-          git show origin/gh-pages:x86_64/coreos.files.tar.gz > /tmp/repo-root/x86_64/coreos.files.tar.gz 2>/dev/null || true
+          git config --global --add safe.directory /github/workspace
+          
+          # Clone existing gh-pages or create new one
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null 2>&1; then
+            git fetch origin gh-pages
+            git checkout gh-pages
+          else
+            git checkout --orphan gh-pages
+            git rm -rf . 2>/dev/null || true
+            mkdir -p x86_64
+          fi
 
-      - name: Add package to repo database
+      - name: Remove old versions of this package only
+        run: |
+          # Remove older versions of the package we're building
+          cd x86_64
+          for file in ${{ env.PKG_NAME }}-*.pkg.tar.zst; do
+            if [[ -f "$file" && "$file" != "${{ env.PKG_FILE }}" ]]; then
+              echo "Removing old version: $file"
+              rm -f "$file" "$file.sig"
+              # Also remove from db
+              repo-remove --sign --key ${{ env.GPG_KEY_ID }} coreos.db.tar.gz "${{ env.PKG_NAME }}" 2>/dev/null || true
+            fi
+          done
+          cd ..
+
+      - name: Add new package to repo
         env:
           GPG_KEY_ID: ${{ secrets.COREOS_GPG_KEY_ID }}
         run: |
-          cp packages/${{ env.PKG_NAME }}/${{ env.PKG_FILE }} /tmp/repo-root/x86_64/
-          cp packages/${{ env.PKG_NAME }}/${{ env.PKG_FILE }}.sig /tmp/repo-root/x86_64/
-          cd /tmp/repo-root/x86_64
+          # Copy new package files
+          cp packages/${{ env.PKG_NAME }}/${{ env.PKG_FILE }} x86_64/
+          cp packages/${{ env.PKG_NAME }}/${{ env.PKG_FILE }}.sig x86_64/
+          
+          cd x86_64
+          
           # Tell GPG to use loopback so it doesn't try to open a TTY
           echo "pinentry-mode loopback" >> /github/home/.gnupg/gpg.conf
+          
+          # Add package to repository database
           repo-add --sign \
                   --key ${GPG_KEY_ID} \
                   --verify \
                   coreos.db.tar.gz \
                   ${{ env.PKG_FILE }}
+          
+          # Create convenience symlinks
           ln -sf coreos.db.tar.gz coreos.db
           ln -sf coreos.files.tar.gz coreos.files
+          cd ..
 
       # ── Export public key for users ────────────────────────────────────────
       - name: Export public key
         run: |
-          gpg --armor --export ${{ env.GPG_KEY_ID }} > /tmp/repo-root/coreos-repo.gpg
+          gpg --armor --export ${{ env.GPG_KEY_ID }} > coreos-repo.gpg
 
       # ── Push to gh-pages ───────────────────────────────────────────────────
       - name: Push to gh-pages
         run: |
-          cd /tmp/repo-root
-          git init
-          git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
-          git checkout -b gh-pages
           git add .
-          git commit -m "repo: add ${{ env.PKG_FILE }}"
-          git push origin gh-pages --force
+          git commit -m "repo: add ${{ env.PKG_FILE }}" || echo "No changes to commit"
+          git push origin gh-pages
